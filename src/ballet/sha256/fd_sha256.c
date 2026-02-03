@@ -145,6 +145,13 @@ fd_sha256_core_ref( uint *        state,
 # define Ch(x,y,z)  (((x) & (y)) ^ ((~(x)) & (z)))
 # define Maj(x,y,z) (((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)))
 
+# define ROUND(a,b,c,d,e,f,g,h,Wi,Ki) do { \
+    uint T1 = (h) + Sigma1(e) + Ch((e),(f),(g)) + (Ki) + (Wi); \
+    uint T2 = Sigma0(a) + Maj((a),(b),(c)); \
+    (d) += T1; \
+    (h) = T1 + T2; \
+  } while(0)
+
   uint const * W = (uint const *)block;
   do {
     uint a = state[0];
@@ -158,37 +165,56 @@ fd_sha256_core_ref( uint *        state,
 
     uint X[16];
 
-    ulong i;
-    for( i=0UL; i<16UL; i++ ) {
-      X[i] = fd_uint_bswap( W[i] );
-      uint T1 = X[i] + h + Sigma1(e) + Ch(e, f, g) + fd_sha256_K[i];
-      uint T2 = Sigma0(a) + Maj(a, b, c);
-      h = g;
-      g = f;
-      f = e;
-      e = d + T1;
-      d = c;
-      c = b;
-      b = a;
-      a = T1 + T2;
-    }
-    for( ; i<64UL; i++ ) {
-      uint s0 = X[(i +  1UL) & 0x0fUL];
-      uint s1 = X[(i + 14UL) & 0x0fUL];
-      s0 = sigma0(s0);
-      s1 = sigma1(s1);
-      X[i & 0xfUL] += s0 + s1 + X[(i + 9UL) & 0xfUL];
-      uint T1 = X[i & 0xfUL ] + h + Sigma1(e) + Ch(e, f, g) + fd_sha256_K[i];
-      uint T2 = Sigma0(a) + Maj(a, b, c);
-      h = g;
-      g = f;
-      f = e;
-      e = d + T1;
-      d = c;
-      c = b;
-      b = a;
-      a = T1 + T2;
-    }
+    /* Unroll first 16 rounds with message load */
+    X[ 0] = fd_uint_bswap( W[ 0] ); ROUND(a,b,c,d,e,f,g,h, X[ 0], fd_sha256_K[ 0]);
+    X[ 1] = fd_uint_bswap( W[ 1] ); ROUND(h,a,b,c,d,e,f,g, X[ 1], fd_sha256_K[ 1]);
+    X[ 2] = fd_uint_bswap( W[ 2] ); ROUND(g,h,a,b,c,d,e,f, X[ 2], fd_sha256_K[ 2]);
+    X[ 3] = fd_uint_bswap( W[ 3] ); ROUND(f,g,h,a,b,c,d,e, X[ 3], fd_sha256_K[ 3]);
+    X[ 4] = fd_uint_bswap( W[ 4] ); ROUND(e,f,g,h,a,b,c,d, X[ 4], fd_sha256_K[ 4]);
+    X[ 5] = fd_uint_bswap( W[ 5] ); ROUND(d,e,f,g,h,a,b,c, X[ 5], fd_sha256_K[ 5]);
+    X[ 6] = fd_uint_bswap( W[ 6] ); ROUND(c,d,e,f,g,h,a,b, X[ 6], fd_sha256_K[ 6]);
+    X[ 7] = fd_uint_bswap( W[ 7] ); ROUND(b,c,d,e,f,g,h,a, X[ 7], fd_sha256_K[ 7]);
+    X[ 8] = fd_uint_bswap( W[ 8] ); ROUND(a,b,c,d,e,f,g,h, X[ 8], fd_sha256_K[ 8]);
+    X[ 9] = fd_uint_bswap( W[ 9] ); ROUND(h,a,b,c,d,e,f,g, X[ 9], fd_sha256_K[ 9]);
+    X[10] = fd_uint_bswap( W[10] ); ROUND(g,h,a,b,c,d,e,f, X[10], fd_sha256_K[10]);
+    X[11] = fd_uint_bswap( W[11] ); ROUND(f,g,h,a,b,c,d,e, X[11], fd_sha256_K[11]);
+    X[12] = fd_uint_bswap( W[12] ); ROUND(e,f,g,h,a,b,c,d, X[12], fd_sha256_K[12]);
+    X[13] = fd_uint_bswap( W[13] ); ROUND(d,e,f,g,h,a,b,c, X[13], fd_sha256_K[13]);
+    X[14] = fd_uint_bswap( W[14] ); ROUND(c,d,e,f,g,h,a,b, X[14], fd_sha256_K[14]);
+    X[15] = fd_uint_bswap( W[15] ); ROUND(b,c,d,e,f,g,h,a, X[15], fd_sha256_K[15]);
+
+    /* Rounds 16-63 with message schedule update */
+#   define ROUND_EXP(a,b,c,d,e,f,g,h,i) do { \
+      X[(i)&0xf] += sigma1(X[((i)-2)&0xf]) + X[((i)-7)&0xf] + sigma0(X[((i)-15)&0xf]); \
+      ROUND(a,b,c,d,e,f,g,h, X[(i)&0xf], fd_sha256_K[i]); \
+    } while(0)
+
+    ROUND_EXP(a,b,c,d,e,f,g,h,16); ROUND_EXP(h,a,b,c,d,e,f,g,17);
+    ROUND_EXP(g,h,a,b,c,d,e,f,18); ROUND_EXP(f,g,h,a,b,c,d,e,19);
+    ROUND_EXP(e,f,g,h,a,b,c,d,20); ROUND_EXP(d,e,f,g,h,a,b,c,21);
+    ROUND_EXP(c,d,e,f,g,h,a,b,22); ROUND_EXP(b,c,d,e,f,g,h,a,23);
+    ROUND_EXP(a,b,c,d,e,f,g,h,24); ROUND_EXP(h,a,b,c,d,e,f,g,25);
+    ROUND_EXP(g,h,a,b,c,d,e,f,26); ROUND_EXP(f,g,h,a,b,c,d,e,27);
+    ROUND_EXP(e,f,g,h,a,b,c,d,28); ROUND_EXP(d,e,f,g,h,a,b,c,29);
+    ROUND_EXP(c,d,e,f,g,h,a,b,30); ROUND_EXP(b,c,d,e,f,g,h,a,31);
+    ROUND_EXP(a,b,c,d,e,f,g,h,32); ROUND_EXP(h,a,b,c,d,e,f,g,33);
+    ROUND_EXP(g,h,a,b,c,d,e,f,34); ROUND_EXP(f,g,h,a,b,c,d,e,35);
+    ROUND_EXP(e,f,g,h,a,b,c,d,36); ROUND_EXP(d,e,f,g,h,a,b,c,37);
+    ROUND_EXP(c,d,e,f,g,h,a,b,38); ROUND_EXP(b,c,d,e,f,g,h,a,39);
+    ROUND_EXP(a,b,c,d,e,f,g,h,40); ROUND_EXP(h,a,b,c,d,e,f,g,41);
+    ROUND_EXP(g,h,a,b,c,d,e,f,42); ROUND_EXP(f,g,h,a,b,c,d,e,43);
+    ROUND_EXP(e,f,g,h,a,b,c,d,44); ROUND_EXP(d,e,f,g,h,a,b,c,45);
+    ROUND_EXP(c,d,e,f,g,h,a,b,46); ROUND_EXP(b,c,d,e,f,g,h,a,47);
+    ROUND_EXP(a,b,c,d,e,f,g,h,48); ROUND_EXP(h,a,b,c,d,e,f,g,49);
+    ROUND_EXP(g,h,a,b,c,d,e,f,50); ROUND_EXP(f,g,h,a,b,c,d,e,51);
+    ROUND_EXP(e,f,g,h,a,b,c,d,52); ROUND_EXP(d,e,f,g,h,a,b,c,53);
+    ROUND_EXP(c,d,e,f,g,h,a,b,54); ROUND_EXP(b,c,d,e,f,g,h,a,55);
+    ROUND_EXP(a,b,c,d,e,f,g,h,56); ROUND_EXP(h,a,b,c,d,e,f,g,57);
+    ROUND_EXP(g,h,a,b,c,d,e,f,58); ROUND_EXP(f,g,h,a,b,c,d,e,59);
+    ROUND_EXP(e,f,g,h,a,b,c,d,60); ROUND_EXP(d,e,f,g,h,a,b,c,61);
+    ROUND_EXP(c,d,e,f,g,h,a,b,62); ROUND_EXP(b,c,d,e,f,g,h,a,63);
+
+#   undef ROUND_EXP
 
     state[0] += a;
     state[1] += b;
@@ -202,6 +228,7 @@ fd_sha256_core_ref( uint *        state,
     W += 16UL;
   } while( --block_cnt );
 
+# undef ROUND
 # undef ROTATE
 # undef Sigma0
 # undef Sigma1
@@ -473,15 +500,16 @@ fd_sha256_fini( fd_sha256_t * sha,
 
   /* Unpack the result into md (annoying bswaps here) */
 
-  state[0] = fd_uint_bswap( state[0] );
-  state[1] = fd_uint_bswap( state[1] );
-  state[2] = fd_uint_bswap( state[2] );
-  state[3] = fd_uint_bswap( state[3] );
-  state[4] = fd_uint_bswap( state[4] );
-  state[5] = fd_uint_bswap( state[5] );
-  state[6] = fd_uint_bswap( state[6] );
-  state[7] = fd_uint_bswap( state[7] );
-  return memcpy( _hash, state, 32 );
+  uchar * hash = (uchar *)_hash;
+  FD_STORE( uint, hash,      fd_uint_bswap( state[0] ) );
+  FD_STORE( uint, hash+ 4UL, fd_uint_bswap( state[1] ) );
+  FD_STORE( uint, hash+ 8UL, fd_uint_bswap( state[2] ) );
+  FD_STORE( uint, hash+12UL, fd_uint_bswap( state[3] ) );
+  FD_STORE( uint, hash+16UL, fd_uint_bswap( state[4] ) );
+  FD_STORE( uint, hash+20UL, fd_uint_bswap( state[5] ) );
+  FD_STORE( uint, hash+24UL, fd_uint_bswap( state[6] ) );
+  FD_STORE( uint, hash+28UL, fd_uint_bswap( state[7] ) );
+  return _hash;
 }
 
 void *
@@ -524,15 +552,16 @@ fd_sha256_hash( void const * _data,
   FD_STORE( ulong, buf+FD_SHA256_PRIVATE_BUF_MAX-8UL, fd_ulong_bswap( bit_cnt ) );
   fd_sha256_core( state, buf, 1UL );
 
-  state[0] = fd_uint_bswap( state[0] );
-  state[1] = fd_uint_bswap( state[1] );
-  state[2] = fd_uint_bswap( state[2] );
-  state[3] = fd_uint_bswap( state[3] );
-  state[4] = fd_uint_bswap( state[4] );
-  state[5] = fd_uint_bswap( state[5] );
-  state[6] = fd_uint_bswap( state[6] );
-  state[7] = fd_uint_bswap( state[7] );
-  return memcpy( _hash, state, 32 );
+  uchar * hash = (uchar *)_hash;
+  FD_STORE( uint, hash,      fd_uint_bswap( state[0] ) );
+  FD_STORE( uint, hash+ 4UL, fd_uint_bswap( state[1] ) );
+  FD_STORE( uint, hash+ 8UL, fd_uint_bswap( state[2] ) );
+  FD_STORE( uint, hash+12UL, fd_uint_bswap( state[3] ) );
+  FD_STORE( uint, hash+16UL, fd_uint_bswap( state[4] ) );
+  FD_STORE( uint, hash+20UL, fd_uint_bswap( state[5] ) );
+  FD_STORE( uint, hash+24UL, fd_uint_bswap( state[6] ) );
+  FD_STORE( uint, hash+28UL, fd_uint_bswap( state[7] ) );
+  return _hash;
 }
 
 
