@@ -67,10 +67,11 @@ fd_sha512_private_batch_avx( ulong          batch_cnt,
          the tail, terminate the message, and finally record the size of
          the message in bits at the end as a big endian ulong.  */
 
-      wv_st( (ulong *) tail_data,      zero ); wv_st( (ulong *)(tail_data+ 32), zero );
-      wv_st( (ulong *)(tail_data+ 64), zero ); wv_st( (ulong *)(tail_data+ 96), zero );
-      wv_st( (ulong *)(tail_data+128), zero ); wv_st( (ulong *)(tail_data+160), zero );
-      wv_st( (ulong *)(tail_data+192), zero ); wv_st( (ulong *)(tail_data+224), zero );
+      ulong * tail_ptr = (ulong *)tail_data;
+      wv_st( tail_ptr,    zero ); wv_st( tail_ptr+ 4, zero );
+      wv_st( tail_ptr+ 8, zero ); wv_st( tail_ptr+12, zero );
+      wv_st( tail_ptr+16, zero ); wv_st( tail_ptr+20, zero );
+      wv_st( tail_ptr+24, zero ); wv_st( tail_ptr+28, zero );
 
 #     if 1 /* See notes in fd_sha256_batch_avx.c for more details here */
       ulong src = data + tail_data_off;
@@ -195,39 +196,80 @@ fd_sha512_private_batch_avx( ulong          batch_cnt,
     wv_t T1;
     wv_t T2;
 
-    SHA_CORE( x0, wv_bcast( K[ 0] ) );
-    SHA_CORE( x1, wv_bcast( K[ 1] ) );
-    SHA_CORE( x2, wv_bcast( K[ 2] ) );
-    SHA_CORE( x3, wv_bcast( K[ 3] ) );
-    SHA_CORE( x4, wv_bcast( K[ 4] ) );
-    SHA_CORE( x5, wv_bcast( K[ 5] ) );
-    SHA_CORE( x6, wv_bcast( K[ 6] ) );
-    SHA_CORE( x7, wv_bcast( K[ 7] ) );
-    SHA_CORE( x8, wv_bcast( K[ 8] ) );
-    SHA_CORE( x9, wv_bcast( K[ 9] ) );
-    SHA_CORE( xa, wv_bcast( K[10] ) );
-    SHA_CORE( xb, wv_bcast( K[11] ) );
-    SHA_CORE( xc, wv_bcast( K[12] ) );
-    SHA_CORE( xd, wv_bcast( K[13] ) );
-    SHA_CORE( xe, wv_bcast( K[14] ) );
-    SHA_CORE( xf, wv_bcast( K[15] ) );
+    wv_t k0  = wv_bcast( K[ 0] ); wv_t k1  = wv_bcast( K[ 1] );
+    wv_t k2  = wv_bcast( K[ 2] ); wv_t k3  = wv_bcast( K[ 3] );
+    wv_t k4  = wv_bcast( K[ 4] ); wv_t k5  = wv_bcast( K[ 5] );
+    wv_t k6  = wv_bcast( K[ 6] ); wv_t k7  = wv_bcast( K[ 7] );
+    wv_t k8  = wv_bcast( K[ 8] ); wv_t k9  = wv_bcast( K[ 9] );
+    wv_t k10 = wv_bcast( K[10] ); wv_t k11 = wv_bcast( K[11] );
+    wv_t k12 = wv_bcast( K[12] ); wv_t k13 = wv_bcast( K[13] );
+    wv_t k14 = wv_bcast( K[14] ); wv_t k15 = wv_bcast( K[15] );
+
+    SHA_CORE( x0, k0  );
+    SHA_CORE( x1, k1  );
+    SHA_CORE( x2, k2  );
+    SHA_CORE( x3, k3  );
+    SHA_CORE( x4, k4  );
+    SHA_CORE( x5, k5  );
+    SHA_CORE( x6, k6  );
+    SHA_CORE( x7, k7  );
+    SHA_CORE( x8, k8  );
+    SHA_CORE( x9, k9  );
+    SHA_CORE( xa, k10 );
+    SHA_CORE( xb, k11 );
+    SHA_CORE( xc, k12 );
+    SHA_CORE( xd, k13 );
+    SHA_CORE( xe, k14 );
+    SHA_CORE( xf, k15 );
     for( ulong i=16UL; i<80UL; i+=16UL ) {
-      x0 = wv_add( wv_add( x0, sigma0(x1) ), wv_add( sigma1(xe), x9 ) ); SHA_CORE( x0, wv_bcast( K[i     ] ) );
-      x1 = wv_add( wv_add( x1, sigma0(x2) ), wv_add( sigma1(xf), xa ) ); SHA_CORE( x1, wv_bcast( K[i+ 1UL] ) );
-      x2 = wv_add( wv_add( x2, sigma0(x3) ), wv_add( sigma1(x0), xb ) ); SHA_CORE( x2, wv_bcast( K[i+ 2UL] ) );
-      x3 = wv_add( wv_add( x3, sigma0(x4) ), wv_add( sigma1(x1), xc ) ); SHA_CORE( x3, wv_bcast( K[i+ 3UL] ) );
-      x4 = wv_add( wv_add( x4, sigma0(x5) ), wv_add( sigma1(x2), xd ) ); SHA_CORE( x4, wv_bcast( K[i+ 4UL] ) );
-      x5 = wv_add( wv_add( x5, sigma0(x6) ), wv_add( sigma1(x3), xe ) ); SHA_CORE( x5, wv_bcast( K[i+ 5UL] ) );
-      x6 = wv_add( wv_add( x6, sigma0(x7) ), wv_add( sigma1(x4), xf ) ); SHA_CORE( x6, wv_bcast( K[i+ 6UL] ) );
-      x7 = wv_add( wv_add( x7, sigma0(x8) ), wv_add( sigma1(x5), x0 ) ); SHA_CORE( x7, wv_bcast( K[i+ 7UL] ) );
-      x8 = wv_add( wv_add( x8, sigma0(x9) ), wv_add( sigma1(x6), x1 ) ); SHA_CORE( x8, wv_bcast( K[i+ 8UL] ) );
-      x9 = wv_add( wv_add( x9, sigma0(xa) ), wv_add( sigma1(x7), x2 ) ); SHA_CORE( x9, wv_bcast( K[i+ 9UL] ) );
-      xa = wv_add( wv_add( xa, sigma0(xb) ), wv_add( sigma1(x8), x3 ) ); SHA_CORE( xa, wv_bcast( K[i+10UL] ) );
-      xb = wv_add( wv_add( xb, sigma0(xc) ), wv_add( sigma1(x9), x4 ) ); SHA_CORE( xb, wv_bcast( K[i+11UL] ) );
-      xc = wv_add( wv_add( xc, sigma0(xd) ), wv_add( sigma1(xa), x5 ) ); SHA_CORE( xc, wv_bcast( K[i+12UL] ) );
-      xd = wv_add( wv_add( xd, sigma0(xe) ), wv_add( sigma1(xb), x6 ) ); SHA_CORE( xd, wv_bcast( K[i+13UL] ) );
-      xe = wv_add( wv_add( xe, sigma0(xf) ), wv_add( sigma1(xc), x7 ) ); SHA_CORE( xe, wv_bcast( K[i+14UL] ) );
-      xf = wv_add( wv_add( xf, sigma0(x0) ), wv_add( sigma1(xd), x8 ) ); SHA_CORE( xf, wv_bcast( K[i+15UL] ) );
+      k0  = wv_bcast( K[i     ] ); k1  = wv_bcast( K[i+ 1UL] );
+      k2  = wv_bcast( K[i+ 2UL] ); k3  = wv_bcast( K[i+ 3UL] );
+      k4  = wv_bcast( K[i+ 4UL] ); k5  = wv_bcast( K[i+ 5UL] );
+      k6  = wv_bcast( K[i+ 6UL] ); k7  = wv_bcast( K[i+ 7UL] );
+      k8  = wv_bcast( K[i+ 8UL] ); k9  = wv_bcast( K[i+ 9UL] );
+      k10 = wv_bcast( K[i+10UL] ); k11 = wv_bcast( K[i+11UL] );
+      k12 = wv_bcast( K[i+12UL] ); k13 = wv_bcast( K[i+13UL] );
+      k14 = wv_bcast( K[i+14UL] ); k15 = wv_bcast( K[i+15UL] );
+      
+      wv_t s0_x1 = sigma0(x1); wv_t s1_xe = sigma1(xe);
+      wv_t s0_x2 = sigma0(x2); wv_t s1_xf = sigma1(xf);
+      wv_t s0_x3 = sigma0(x3); wv_t s1_x0 = sigma1(x0);
+      wv_t s0_x4 = sigma0(x4); wv_t s1_x1 = sigma1(x1);
+      
+      x0 = wv_add( wv_add( x0, s0_x1 ), wv_add( s1_xe, x9 ) ); SHA_CORE( x0, k0  );
+      x1 = wv_add( wv_add( x1, s0_x2 ), wv_add( s1_xf, xa ) ); SHA_CORE( x1, k1  );
+      x2 = wv_add( wv_add( x2, s0_x3 ), wv_add( s1_x0, xb ) ); SHA_CORE( x2, k2  );
+      x3 = wv_add( wv_add( x3, s0_x4 ), wv_add( s1_x1, xc ) ); SHA_CORE( x3, k3  );
+      
+      s0_x1 = sigma0(x5); s1_xe = sigma1(x2);
+      s0_x2 = sigma0(x6); s1_xf = sigma1(x3);
+      s0_x3 = sigma0(x7); s1_x0 = sigma1(x4);
+      s0_x4 = sigma0(x8); s1_x1 = sigma1(x5);
+      
+      x4 = wv_add( wv_add( x4, s0_x1 ), wv_add( s1_xe, xd ) ); SHA_CORE( x4, k4  );
+      x5 = wv_add( wv_add( x5, s0_x2 ), wv_add( s1_xf, xe ) ); SHA_CORE( x5, k5  );
+      x6 = wv_add( wv_add( x6, s0_x3 ), wv_add( s1_x0, xf ) ); SHA_CORE( x6, k6  );
+      x7 = wv_add( wv_add( x7, s0_x4 ), wv_add( s1_x1, x0 ) ); SHA_CORE( x7, k7  );
+      
+      s0_x1 = sigma0(x9); s1_xe = sigma1(x6);
+      s0_x2 = sigma0(xa); s1_xf = sigma1(x7);
+      s0_x3 = sigma0(xb); s1_x0 = sigma1(x8);
+      s0_x4 = sigma0(xc); s1_x1 = sigma1(x9);
+      
+      x8 = wv_add( wv_add( x8, s0_x1 ), wv_add( s1_xe, x1 ) ); SHA_CORE( x8, k8  );
+      x9 = wv_add( wv_add( x9, s0_x2 ), wv_add( s1_xf, x2 ) ); SHA_CORE( x9, k9  );
+      xa = wv_add( wv_add( xa, s0_x3 ), wv_add( s1_x0, x3 ) ); SHA_CORE( xa, k10 );
+      xb = wv_add( wv_add( xb, s0_x4 ), wv_add( s1_x1, x4 ) ); SHA_CORE( xb, k11 );
+      
+      s0_x1 = sigma0(xd); s1_xe = sigma1(xa);
+      s0_x2 = sigma0(xe); s1_xf = sigma1(xb);
+      s0_x3 = sigma0(xf); s1_x0 = sigma1(xc);
+      s0_x4 = sigma0(x0); s1_x1 = sigma1(xd);
+      
+      xc = wv_add( wv_add( xc, s0_x1 ), wv_add( s1_xe, x5 ) ); SHA_CORE( xc, k12 );
+      xd = wv_add( wv_add( xd, s0_x2 ), wv_add( s1_xf, x6 ) ); SHA_CORE( xd, k13 );
+      xe = wv_add( wv_add( xe, s0_x3 ), wv_add( s1_x0, x7 ) ); SHA_CORE( xe, k14 );
+      xf = wv_add( wv_add( xf, s0_x4 ), wv_add( s1_x1, x8 ) ); SHA_CORE( xf, k15 );
     }
 
 #   undef SHA_CORE
